@@ -1,0 +1,1 @@
+append verilog_define " " "__user_irq__"

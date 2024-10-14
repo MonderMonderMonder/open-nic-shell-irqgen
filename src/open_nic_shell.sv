@@ -56,15 +56,15 @@ module open_nic_shell #(
   output                   [1:0] qsfp_lpmode,
   output                   [1:0] qsfp_modsell,
   input                    [3:0] satellite_gpio,
-`elsif __au45n__
+`elsif __sn1022__
   input                    [1:0] satellite_gpio,
 `endif
 
   input                          satellite_uart_0_rxd,
   output                         satellite_uart_0_txd,
 
-`ifdef __au45n__
-// U45N has 24 PCIe lanes: x16(host CPU) + x8(ARM CPU)
+`ifdef __sn1022__
+// SN1022 has 24 PCIe lanes: x16(host CPU) + x8(ARM CPU)
   input                [23:0] pcie_rxp,
   input                [23:0] pcie_rxn,
   output               [23:0] pcie_txp,
@@ -84,7 +84,7 @@ module open_nic_shell #(
   output   [4*NUM_CMAC_PORT-1:0] qsfp_txp,
   output   [4*NUM_CMAC_PORT-1:0] qsfp_txn,
 
-`ifdef __au45n__
+`ifdef __sn1022__
   input                          dual0_gt_ref_clk_p,
   input                          dual0_gt_ref_clk_n,
   input                          dual1_gt_ref_clk_p,
@@ -341,7 +341,6 @@ module open_nic_shell #(
   wire                   [1:0] axil_box1_rresp;
   wire                         axil_box1_rready;
 
-  // QDMA subsystem interfaces to the box running at 250MHz
   wire     [NUM_PHYS_FUNC*NUM_QDMA-1:0] axis_qdma_h2c_tvalid;
   wire [512*NUM_PHYS_FUNC*NUM_QDMA-1:0] axis_qdma_h2c_tdata;
   wire  [64*NUM_PHYS_FUNC*NUM_QDMA-1:0] axis_qdma_h2c_tkeep;
@@ -427,8 +426,55 @@ module open_nic_shell #(
   wire                         box_322mhz_rstn;
   wire                         box_322mhz_rst_done;
 
-  wire          [NUM_QDMA-1:0] axil_aclk;
-  wire          [NUM_QDMA-1:0] axis_aclk;
+`ifdef __user_irq__
+  // QDMA User IRQ interface 
+  wire                                  usr_irq_in_vld;
+  wire                            [4:0] usr_irq_in_vec;
+  wire                            [7:0] usr_irq_in_fnc;
+  wire                                  usr_irq_out_ack;
+  wire                                  usr_irq_out_fail;
+`endif
+
+`ifdef __user_qid__
+  wire                  [10:0] axis_tuser_qid;
+  wire                         axis_tuser_qid_valid;
+`endif
+
+`ifdef __qdma_hbm__
+  // QDMA Subsystem to HBM 
+  wire                [63:0]   m_axi_awaddr;
+  wire                 [5:0]   m_axi_awid;
+  wire                 [1:0]   m_axi_awburst;
+  wire                 [2:0]   m_axi_awsize;
+  wire                 [7:0]   m_axi_awlen;
+  wire                         m_axi_awvalid;
+  wire                         m_axi_awready;
+  wire               [255:0]   m_axi_wdata;
+  wire                [31:0]   m_axi_wstrb;
+  wire                         m_axi_wlast;
+  wire                         m_axi_wvalid;
+  wire                         m_axi_wready;
+  wire                         m_axi_bvalid;
+  wire                         m_axi_bready;
+  wire                 [5:0]   m_axi_bid;
+  wire                 [1:0]   m_axi_bresp ;
+  wire                 [5:0]   m_axi_arid;
+  wire                [63:0]   m_axi_araddr;
+  wire                 [7:0]   m_axi_arlen;
+  wire                 [2:0]   m_axi_arsize;
+  wire                 [1:0]   m_axi_arburst;
+  wire                 [5:0]   m_axi_rid;
+  wire                         m_axi_arvalid;
+  wire                         m_axi_arready;
+  wire               [255:0]   m_axi_rdata;
+  wire                 [1:0]   m_axi_rresp;
+  wire                         m_axi_rlast;
+  wire                         m_axi_rvalid;
+  wire                         m_axi_rready;
+`endif
+
+  wire        [NUM_QDMA-1:0]   axil_aclk;
+  wire        [NUM_QDMA-1:0]   axis_aclk;
 
 `ifdef __au55n__
   wire                         ref_clk_100mhz;
@@ -440,9 +486,13 @@ module open_nic_shell #(
   wire                         ref_clk_100mhz;
 `endif
 
-  wire     [NUM_CMAC_PORT-1:0] cmac_clk;
+  wire   [NUM_CMAC_PORT-1:0]   cmac_clk;
 
   // Unused reset pairs must have their "reset_done" tied to 1
+  //assign m_axi_awid[5:4]              = 0;
+  //assign m_axi_bid[5:4]               = 0;
+  //assign m_axi_arid[5:4]              = 0;
+  //assign m_axi_rid[5:4]               = 0;
 
   // First 4-bit for QDMA subsystem
   assign qdma_rstn                    = shell_rstn[NUM_QDMA-1:0];
@@ -485,7 +535,7 @@ module open_nic_shell #(
 
   assign sys_cfg_powerup_rstn = | powerup_rstn; 
 
-`ifdef __au45n__
+`ifdef __sn1022__
   assign qdma_pcie_rxp[23:0] = pcie_rxp;
   assign qdma_pcie_rxn[23:0] = pcie_rxn;
   assign qdma_pcie_txp[23:0] = pcie_txp;
@@ -660,7 +710,7 @@ module open_nic_shell #(
     .qsfp_intl               (qsfp_intl),
     .qsfp_lpmode             (qsfp_lpmode),
     .qsfp_modsell            (qsfp_modsell),
-  `elsif __au45n__
+  `elsif __sn1022__
   
   `endif
 
@@ -712,6 +762,62 @@ module open_nic_shell #(
       .s_axis_c2h_tuser_dst                 (axis_qdma_c2h_tuser_dst[`getvec(16*NUM_PHYS_FUNC, i)]),
       .s_axis_c2h_tready                    (axis_qdma_c2h_tready[`getvec(NUM_PHYS_FUNC, i)]),
 
+  `ifdef __user_irq__
+      // QDMA User IRQ interface 
+      .usr_irq_in_vld                       (usr_irq_in_vld),
+      .usr_irq_in_vec                       (usr_irq_in_vec),
+      .usr_irq_in_fnc                       (usr_irq_in_fnc),
+      .usr_irq_out_ack                      (usr_irq_out_ack),
+      .usr_irq_out_fail                     (usr_irq_out_fail),
+  `endif
+
+  `ifdef __user_qid__
+      .s_axis_tuser_qid                     (axis_tuser_qid),
+      .s_axis_tuser_qid_valid               (axis_tuser_qid_valid),
+  `endif
+
+  `ifdef __qdma_hbm__
+      // AXI MM Interface
+      .m_axi_awid                           (m_axi_awid[3:0]),//4 -> 6
+      .m_axi_awaddr                         (m_axi_awaddr),   //64 -> 32
+      .m_axi_awuser                         (),               //32
+      .m_axi_awlen                          (m_axi_awlen),    //8 -> 4
+      .m_axi_awsize                         (m_axi_awsize),   //3 -> 3
+      .m_axi_awburst                        (m_axi_awburst),  //2 -> 2
+      .m_axi_awprot                         (),               //3 -> None
+      .m_axi_awvalid                        (m_axi_awvalid),  //1 -> 1
+      .m_axi_awready                        (m_axi_awready),  //1 -> 1
+      .m_axi_awlock                         (),               //1 -> None
+      .m_axi_awcache                        (),               //4 -> None
+      .m_axi_wdata                          (m_axi_wdata),    //256 -> 256
+      .m_axi_wuser                          (),               //32
+      .m_axi_wstrb                          (m_axi_wstrb),    //32  -> 32
+      .m_axi_wlast                          (m_axi_wlast),    //1 -> 1
+      .m_axi_wvalid                         (m_axi_wvalid),   //1 -> 1
+      .m_axi_wready                         (m_axi_wready),   //1 -> 1
+      .m_axi_bid                            (m_axi_bid[3:0]), //4 -> 6
+      .m_axi_bresp                          (m_axi_bresp),    //2
+      .m_axi_bvalid                         (m_axi_bvalid),   //1
+      .m_axi_bready                         (m_axi_bready),   //1
+      .m_axi_arid                           (m_axi_arid[3:0]),//4 -> 6
+      .m_axi_araddr                         (m_axi_araddr),   //64 -> 34
+      .m_axi_aruser                         (),
+      .m_axi_arlen                          (m_axi_arlen),
+      .m_axi_arsize                         (m_axi_arsize),
+      .m_axi_arburst                        (m_axi_arburst),
+      .m_axi_arprot                         (),
+      .m_axi_arvalid                        (m_axi_arvalid),
+      .m_axi_arready                        (m_axi_arready),
+      .m_axi_arlock                         (),
+      .m_axi_arcache                        (),
+      .m_axi_rid                            (m_axi_rid[3:0]), //4 -> 6
+      .m_axi_rdata                          (m_axi_rdata),
+      .m_axi_rresp                          (m_axi_rresp),
+      .m_axi_rlast                          (m_axi_rlast),
+      .m_axi_rvalid                         (m_axi_rvalid),
+      .m_axi_rready                         (m_axi_rready),
+  `endif
+  
   `ifdef __synthesis__
       .pcie_rxp                             (qdma_pcie_rxp[`getvec(16, i)]),
       .pcie_rxn                             (qdma_pcie_rxn[`getvec(16, i)]),
@@ -909,7 +1015,7 @@ module open_nic_shell #(
       .gt_refclk_p                  (qsfp_refclk_p[i]),
       .gt_refclk_n                  (qsfp_refclk_n[i]),
 
-`ifdef __au45n__
+`ifdef __sn1022__
       .dual0_gt_ref_clk_p           (dual0_gt_ref_clk_p),
       .dual0_gt_ref_clk_n           (dual0_gt_ref_clk_n),
       .dual1_gt_ref_clk_p           (dual1_gt_ref_clk_p),
@@ -1001,6 +1107,53 @@ module open_nic_shell #(
     .s_axis_adap_rx_250mhz_tuser_src  (axis_adap_rx_250mhz_tuser_src),
     .s_axis_adap_rx_250mhz_tuser_dst  (axis_adap_rx_250mhz_tuser_dst),
     .s_axis_adap_rx_250mhz_tready     (axis_adap_rx_250mhz_tready),
+
+  `ifdef __user_irq__
+    // QDMA User IRQ interface 
+    .usr_irq_in_vld                       (usr_irq_in_vld),
+    .usr_irq_in_vec                       (usr_irq_in_vec),
+    .usr_irq_in_fnc                       (usr_irq_in_fnc),
+    .usr_irq_out_ack                      (usr_irq_out_ack),
+    .usr_irq_out_fail                     (usr_irq_out_fail),
+  `endif
+  
+  `ifdef __user_qid__
+    .m_axis_tuser_qid                 (axis_tuser_qid),
+    .m_axis_tuser_qid_valid           (axis_tuser_qid_valid),
+  `endif
+  
+  `ifdef __qdma_hbm__
+    // AXI Memory Mapped interface
+    .s_axi_awid                       (m_axi_awid),
+    .s_axi_awaddr                     (m_axi_awaddr[33:0]),
+    .s_axi_awlen                      (m_axi_awlen[3:0]),
+    .s_axi_awsize                     (m_axi_awsize),
+    .s_axi_awburst                    (m_axi_awburst),
+    .s_axi_awvalid                    (m_axi_awvalid),
+    .s_axi_awready                    (m_axi_awready),
+    .s_axi_wdata                      (m_axi_wdata),
+    .s_axi_wstrb                      (m_axi_wstrb),
+    .s_axi_wlast                      (m_axi_wlast),
+    .s_axi_wvalid                     (m_axi_wvalid),
+    .s_axi_wready                     (m_axi_wready),
+    .s_axi_bid                        (m_axi_bid),
+    .s_axi_bresp                      (m_axi_bresp),
+    .s_axi_bvalid                     (m_axi_bvalid),
+    .s_axi_bready                     (m_axi_bready),
+    .s_axi_arid                       (m_axi_arid),
+    .s_axi_araddr                     (m_axi_araddr[33:0]),
+    .s_axi_arlen                      (m_axi_arlen[3:0]),
+    .s_axi_arsize                     (m_axi_arsize),
+    .s_axi_arburst                    (m_axi_arburst),
+    .s_axi_arvalid                    (m_axi_arvalid),
+    .s_axi_arready                    (m_axi_arready),
+    .s_axi_rid                        (m_axi_rid),
+    .s_axi_rdata                      (m_axi_rdata),
+    .s_axi_rresp                      (m_axi_rresp),
+    .s_axi_rlast                      (m_axi_rlast),
+    .s_axi_rvalid                     (m_axi_rvalid),
+    .s_axi_rready                     (m_axi_rready),
+  `endif
 
     .mod_rstn                         (user_250mhz_rstn),
     .mod_rst_done                     (user_250mhz_rst_done),

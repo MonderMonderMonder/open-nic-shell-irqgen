@@ -15,6 +15,7 @@
 // limitations under the License.
 //
 // *************************************************************************
+`include "open_nic_shell_macros.vh"
 `timescale 1ns/1ps
 module box_250mhz #(
   parameter int MIN_PKT_LEN   = 64,
@@ -76,6 +77,54 @@ module box_250mhz #(
   input   [16*NUM_CMAC_PORT-1:0] s_axis_adap_rx_250mhz_tuser_src,
   input   [16*NUM_CMAC_PORT-1:0] s_axis_adap_rx_250mhz_tuser_dst,
   output     [NUM_CMAC_PORT-1:0] s_axis_adap_rx_250mhz_tready,
+
+`ifdef __user_irq__
+  // QDMA User IRQ interface 
+  output                         usr_irq_in_vld,
+  output                   [4:0] usr_irq_in_vec,
+  output                   [7:0] usr_irq_in_fnc,
+  input                          usr_irq_out_ack,
+  input                          usr_irq_out_fail,
+`endif 
+
+`ifdef __user_qid__
+  // FOR PASSING QID FROM USER LOGIC
+  output                  [10:0] m_axis_tuser_qid,
+  output                         m_axis_tuser_qid_valid,
+`endif 
+
+`ifdef __qdma_hbm__
+  // AXI Memory Mapped interface
+  input   [5:0]     s_axi_awid,
+  input   [33:0]  s_axi_awaddr,
+  input   [7:0]     s_axi_awlen,
+  input   [2:0]     s_axi_awsize,
+  input   [1:0]     s_axi_awburst,
+  input             s_axi_awvalid,
+  output            s_axi_awready,
+  input   [255:0]   s_axi_wdata,
+  input   [31:0]    s_axi_wstrb,
+  input             s_axi_wlast,
+  input             s_axi_wvalid,
+  output            s_axi_wready,
+  output  [5:0]     s_axi_bid,
+  output  [1:0]     s_axi_bresp,
+  output            s_axi_bvalid,
+  input             s_axi_bready,
+  input   [5:0]     s_axi_arid,
+  input   [33:0]    s_axi_araddr,
+  input   [7:0]     s_axi_arlen,
+  input   [2:0]     s_axi_arsize,
+  input   [1:0]     s_axi_arburst,
+  input             s_axi_arvalid,
+  output            s_axi_arready,
+  output  [5:0]     s_axi_rid,
+  output  [255:0]   s_axi_rdata,
+  output  [1:0]     s_axi_rresp,
+  output            s_axi_rlast,
+  output            s_axi_rvalid,
+  input             s_axi_rready,
+`endif
 
   input                   [15:0] mod_rstn,
   output                  [15:0] mod_rst_done,
