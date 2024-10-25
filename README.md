@@ -39,7 +39,7 @@ The FSM controls the interrupt generation process. It includes two main states:
 
 The latency measurement mechanism uses a free-running counter with a resolution of 4 ns. It records timestamps before and after the interrupt is generated and acknowledged. These timestamps can be read by the host system to calculate the total latency for processing the interrupt. The timestamps are stored in memory-mapped registers accessible via the AXI4-Lite interface.
 
-![latency measurement mechanism](plugin/user_interrupt/docs/latency_measurement.png)
+![latency measurement mechanism](plugin/user_interrupt/docs/latency_measurement.jpg)
 
 ### Testing and Verification
 
